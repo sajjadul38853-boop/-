@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User profile data including scores and badges.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "totalScore": { "type": "integer" },
+        "badges": { "type": "array", "items": { "type": "string" } },
+        "quizzesTaken": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isAdmin": { "type": "boolean" }
+      },
+      "required": ["uid", "displayName"]
+    },
+    "Category": {
+      "title": "Quiz Category",
+      "description": "Categories for quizzes.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "icon": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Question": {
+      "title": "Quiz Question",
+      "description": "A single quiz question.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "questionText": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "correctOptionIndex": { "type": "integer" },
+        "explanation": { "type": "string" },
+        "difficulty": { "type": "string", "enum": ["easy", "medium", "hard"] }
+      },
+      "required": ["id", "categoryId", "questionText", "options", "correctOptionIndex"]
+    },
+    "QuizResult": {
+      "title": "Quiz Result",
+      "description": "Result of a completed quiz session.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "score": { "type": "integer" },
+        "totalQuestions": { "type": "integer" },
+        "timeTaken": { "type": "integer" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "categoryId", "score", "totalQuestions", "completedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Primary storage for user profile information."
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Definitions for quiz categories."
+    },
+    "/questions/{questionId}": {
+      "schema": "Question",
+      "description": "Master list of questions."
+    },
+    "/results/{resultId}": {
+      "schema": "QuizResult",
+      "description": "Recorded history of quiz attempts."
+    }
+  }
+}

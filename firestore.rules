@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isAdmin() { 
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'shadhinbanglastore@gmail.com'
+      ); 
+    }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // --- User Profiles ---
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.uid is string && 
+               data.displayName is string && data.displayName.size() <= 100 &&
+               (data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 500)) &&
+               data.totalScore is int &&
+               data.quizzesTaken is int &&
+               data.isAdmin is bool;
+      }
+
+      // Public profile data is readable by all (shorter list check)
+      allow get, list: if isSignedIn();
+      
+      allow create: if isOwner(userId) && 
+                      isValidUser(incoming()) && 
+                      incoming().isAdmin == false &&
+                      incoming().totalScore == 0;
+                      
+      allow update: if (isOwner(userId) && 
+                      isValidUser(incoming()) && 
+                      incoming().isAdmin == existing().isAdmin && // Cannot self-promote
+                      // Only allow incrementing scores or quizzes
+                      incoming().diff(existing()).affectedKeys().hasOnly(['totalScore', 'quizzesTaken', 'displayName', 'photoURL'])) || 
+                      isAdmin();
+    }
+
+    // --- Categories ---
+    match /categories/{catId} {
+      function isValidCategory(data) {
+        return data.name is string && data.name.size() <= 100 &&
+               data.description is string && data.description.size() <= 500 &&
+               data.icon is string && data.icon.size() <= 50;
+      }
+
+      allow list, get: if true; // Public access to categories
+      allow create, update: if isAdmin() && isValidCategory(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // --- Questions ---
+    match /questions/{qId} {
+      function isValidQuestion(data) {
+        return data.categoryId is string && 
+               data.questionText is string && data.questionText.size() <= 1000 &&
+               data.options is list && data.options.size() == 4 &&
+               data.correctOptionIndex is int && 
+               data.correctOptionIndex >= 0 && data.correctOptionIndex < 4;
+      }
+
+      allow list: if isSignedIn() && request.query.limit <= 50;
+      allow get: if isSignedIn();
+      allow create, update: if isAdmin() && isValidQuestion(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // --- Quiz Results ---
+    match /results/{resId} {
+      function isValidResult(data) {
+        return data.userId == request.auth.uid &&
+               data.score is int && data.score >= 0 &&
+               data.totalQuestions is int && data.totalQuestions > 0;
+      }
+
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isSignedIn() && isValidResult(incoming());
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Admins Collection (Dynamic RBAC) ---
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Only manageable via Console or CLI
+    }
+  }
+}
